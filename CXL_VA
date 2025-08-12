@@ -1,0 +1,71 @@
+// mmap_write.c
+#include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <omp.h>
+
+
+int main() {
+    const char *mmap_path = "./mmapfile";
+    off_t file_size = 128ULL * 1024 * 1024 * 1024; // 128GB
+    off_t one_thread = 16384ULL * 1024 * 1024; // 64MB
+
+    printf("allocating %ld GB = %ld bytes\n", file_size / (1024 * 1024 * 1024), file_size);
+
+    int fd = open(mmap_path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        fprintf(stderr, "open() failed: %s\n", strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    // 設定檔案大小為 128GB
+    if (lseek(fd, file_size, SEEK_SET) == -1 || write(fd, "", 1) != 1) {
+        fprintf(stderr, "failed to expand file: %s\n", strerror(errno));
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
+    uint8_t *p = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (p == MAP_FAILED) {
+        fprintf(stderr, "mmap() failed: %s\n", strerror(errno));
+        close(fd);
+        return EXIT_FAILURE;
+    }
+
+    printf("writing %lu uint8_t elements\n", (unsigned long)file_size);
+
+    // 🔸 開始計時
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    for(size_t j = 0; j < 8 ;j++){
+        for (size_t i = 0; i < one_thread; i++) {
+            p[one_thread*j+i] = (uint8_t)(i % 256);
+        }
+        usleep(1000);
+        
+        
+        for (size_t i = 0; i < one_thread/2; i++) {
+            (void)p[one_thread*j+i]; 
+        }
+        
+    }
+    
+    // 🔸 結束計時
+    gettimeofday(&end, NULL);
+    long seconds = end.tv_sec - start.tv_sec;
+    long usec = end.tv_usec - start.tv_usec;
+    double elapsed_ms = (seconds * 1000.0) + (usec / 1000.0);
+
+    printf("write time: %.3f ms\n", elapsed_ms);
+
+    munmap(p, file_size);
+    close(fd);
+    return EXIT_SUCCESS;
+}
