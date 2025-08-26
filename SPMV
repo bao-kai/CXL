@@ -14,8 +14,8 @@
 
 int main() {
     const char *mmap_path = "./mmapfile";
-    off_t file_size = 128ULL * 1024 * 1024 * 1024; // 128G
-    off_t one_thread = 32768ULL * 1024 * 1024; // 64MB
+    off_t file_size = 634ULL  * 1024 * 1024; // 634MB
+    off_t one_thread = 64ULL * 1024 * 1024; // 64MB
     off_t one_thread_numbers = one_thread / sizeof(uint64_t); // 每個線程寫入的 uint64_t 數量
     off_t rep_times = file_size / one_thread_numbers; // 
 
