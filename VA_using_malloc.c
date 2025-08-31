@@ -19,24 +19,21 @@ int main() {
     printf("Allocating %zu bytes (%.1f GB)\n",
            file_size, file_size / (1024.0 * 1024.0 * 1024.0));
 
-    uint8_t *p = (uint8_t *)malloc(file_size);
+    volatile uint8_t *p = (uint8_t *)malloc(file_size);
     if (!p) {
         fprintf(stderr, "malloc() failed\n");
         return EXIT_FAILURE;
     }
-
+    printf("rep_times: %d, one_thread_numbers: %d\n", (int)rep_times, (int)one_thread_numbers);
     // 初始化記憶體 (確保實際分配到實體頁面)
     for(size_t j = 0; j < rep_times ;j++){
         for (size_t i = 0; i < one_thread_numbers; i++) {
-            p[one_thread_numbers * j + i] = (uint64_t)(i % 256);
+            p[one_thread_numbers * j + i] = (uint8_t)(i % 256);
         }
-        usleep(1000);
+        usleep(1);
         for (size_t i = 0; i < one_thread_numbers/2; i++) {
             (void)p[one_thread_numbers + i]; 
         }
-        
-        
-        
         
     }
 
