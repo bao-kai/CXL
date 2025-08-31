@@ -1,4 +1,4 @@
-// mmap_write.c
+// mmap_read_64g.c
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -7,65 +7,40 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include <unistd.h>
-#include <omp.h>
-
 
 int main() {
-    const char *mmap_path = "./mmapfile";
-    off_t file_size = 128ULL * 1024 * 1024 * 1024; // 128GB
-    off_t one_thread = 16384ULL * 1024 * 1024; // 64MB
+    size_t file_size = 128ULL * 1024 * 1024 * 1024; // 128GB
+    off_t one_thread = 64ULL * 1024 * 1024; // 64MB
 
-    printf("allocating %ld GB = %ld bytes\n", file_size / (1024 * 1024 * 1024), file_size);
+    off_t one_thread_numbers = one_thread / sizeof(uint8_t); // 每個線程寫入的 uint64_t 數量
+    off_t rep_times = file_size / one_thread_numbers; // 
 
-    int fd = open(mmap_path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-    if (fd < 0) {
-        fprintf(stderr, "open() failed: %s\n", strerror(errno));
+    printf("Allocating %zu bytes (%.1f GB)\n",
+           file_size, file_size / (1024.0 * 1024.0 * 1024.0));
+
+    volatile uint8_t *p = (uint8_t *)malloc(file_size);
+    if (!p) {
+        fprintf(stderr, "malloc() failed\n");
         return EXIT_FAILURE;
     }
-
-    // 設定檔案大小為 128GB
-    if (lseek(fd, file_size, SEEK_SET) == -1 || write(fd, "", 1) != 1) {
-        fprintf(stderr, "failed to expand file: %s\n", strerror(errno));
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    uint8_t *p = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    if (p == MAP_FAILED) {
-        fprintf(stderr, "mmap() failed: %s\n", strerror(errno));
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    printf("writing %lu uint8_t elements\n", (unsigned long)file_size);
-
-    // 🔸 開始計時
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
-    for(size_t j = 0; j < 8 ;j++){
-        for (size_t i = 0; i < one_thread; i++) {
-            p[one_thread*j+i] = (uint8_t)(i % 256);
+    printf("rep_times: %d, one_thread_numbers: %d\n", (int)rep_times, (int)one_thread_numbers);
+    // 初始化記憶體 (確保實際分配到實體頁面)
+    for(size_t j = 0; j < rep_times ;j++){
+        for (size_t i = 0; i < one_thread_numbers; i++) {
+            p[one_thread_numbers * j + i] = (uint8_t)(i % 256);
         }
-        usleep(1000);
-        
-        
-        for (size_t i = 0; i < one_thread/2; i++) {
-            (void)p[one_thread*j+i]; 
+        usleep(1);
+        for (size_t i = 0; i < one_thread_numbers/2; i++) {
+            (void)p[one_thread_numbers + i]; 
         }
         
     }
+
     
-    // 🔸 結束計時
-    gettimeofday(&end, NULL);
-    long seconds = end.tv_sec - start.tv_sec;
-    long usec = end.tv_usec - start.tv_usec;
-    double elapsed_ms = (seconds * 1000.0) + (usec / 1000.0);
 
-    printf("write time: %.3f ms\n", elapsed_ms);
+    
 
-    munmap(p, file_size);
-    close(fd);
+    free(p);
     return EXIT_SUCCESS;
 }
